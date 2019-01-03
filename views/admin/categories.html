@@ -1,0 +1,331 @@
+{{extend './layout/layout.html'}}
+
+{{block 'head'}}
+{{/block}}
+
+{{block 'body'}}
+<div class="container-fluid">
+  <div class="page-title">
+    <h1>分类目录</h1>
+  </div>
+  <!-- 有错误信息时展示 -->
+  <!-- <div class="alert alert-danger">
+    <strong>错误！</strong>发生XXX错误
+  </div> -->
+  <div class="row">
+    <div class="col-md-4">
+      <form id="add_form">
+        <h2>添加新分类目录</h2>
+        <div class="form-group">
+          <label for="name">名称</label>
+          <input id="name" class="form-control" name="name" type="text" placeholder="分类名称">
+        </div>
+        <div class="form-group">
+          <label for="slug">别名</label>
+          <input id="slug" class="form-control" name="slug" type="text" placeholder="slug">
+          <p class="help-block">https://example.com/category/<strong>slug</strong></p>
+        </div>
+        <div class="form-group">
+          <button class="btn btn-primary" type="submit">添加</button>
+        </div>
+      </form>
+    </div>
+    <div class="col-md-8">
+      <div class="page-action">
+        <!-- show when multiple checked -->
+        <a class="btn btn-danger btn-sm" href="javascript:;" style="display: none">批量删除</a>
+      </div>
+      <table class="table table-striped table-bordered table-hover">
+        <thead>
+          <tr>
+            <th class="text-center" width="40"><input type="checkbox"></th>
+            <th>名称</th>
+            <th>Slug</th>
+            <th class="text-center" width="100">操作</th>
+          </tr>
+        </thead>
+        <tbody id="list_container"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<!-- 
+  不写 JavaScript 显示模态框
+    data-toggle="modal"
+    data-target="#exampleModal"
+-->
+<!-- <button
+  type="button"
+  class="btn btn-primary"
+  data-toggle="modal"
+  data-target="#exampleModal" data-whatever="@mdo">Open modal for @mdo</button> -->
+
+<!-- 编辑模态框 -->
+<div class="modal fade" id="editModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <h4 class="modal-title" id="exampleModalLabel">New message</h4>
+      </div>
+      <div class="modal-body">
+        <form id="edit_form"></form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+        <button id="submit_edit" type="button" class="btn btn-primary">保存修改</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- /编辑模态框 -->
+{{/block}}
+
+{{block 'script'}}
+<!-- 
+  页面中不要再引入 art-template 的文件了，因为我们在模板页加载并且修改了模板语法规则
+  如果这里再引入则会把之前的给覆盖掉
+ -->
+<!-- <script src="/public/assets/vendors/art-template/template-web.js"></script> -->
+
+<!-- 编辑表单的模板字符串 -->
+<script type="text/html" id="edit_form_template">
+  <!-- 
+    type 为 hidden 的 input 叫做 表单隐藏域
+    它的作用一般用于服务端数据提交，用户看不见，改不了
+  -->
+  <input type="hidden" name="cate_id" value="{% cate.cate_id %}">
+  <div class="form-group">
+    <label for="recipient-name" class="control-label">分类名称:</label>
+    <input type="text" class="form-control" id="recipient-name" name="cate_name" value="{% cate.cate_name %}">
+  </div>
+  <div class="form-group">
+    <label for="message-text" class="control-label">分类别名:</label>
+    <input type="text" class="form-control" id="recipient-name" name="cate_slug" value="{% cate.cate_slug %}">
+  </div>
+</script>
+<!-- /编辑表单的模板字符串 -->
+
+<!-- 分类列表模板字符串 -->
+<script type="text/html" id="list_template">
+  {%each listData%}
+  <tr>
+    <td class="text-center"><input type="checkbox"></td>
+    <td>{% $value.cate_name %}</td>
+    <td>{% $value.cate_slug %}</td>
+    <td class="text-center">
+      <a data-id="{% $value.cate_id %}" name="edit" href="javascript:;" class="btn btn-info btn-xs">编辑</a>
+      <a data-id="{% $value.cate_id %}" name="delete" href="javascript:;" class="btn btn-danger btn-xs">删除</a>
+    </td>
+  </tr>
+  {%/each%}
+</script>
+<!-- /分类列表模板字符串 -->
+
+<!-- 我们自己的业务脚本代码 -->
+
+<script>
+  // 异步加载数据列表
+  loadList()
+
+  // 一、客户端发起请求
+  // 1. 给删除按钮注册点击事件
+  //    由于DOM是动态追加的，所以要用事件委托的方式注册事件
+  // 2. 发起 ajax 请求执行删除操作
+  //    将要删除的数据 id 通过查询字符串进行传递
+  //    /api/categories/delete?id=xxx&key=value
+  // 
+  // 二、服务端收到请求
+  // 1. 定义一个路由处理请求
+  // 2. 获取要删除的数据 id
+  //    GET 参数通过 req.query 对象获取
+  // 3. 操作数据库，执行删除操作
+  //    DELETE FROM ali_cate WHERE cate_id=xxx
+  // 4. 把执行结果发送给客户端
+  // 
+  // 三、客户端收到响应
+  // 1. 收到响应数据，success 回调函数开始执行
+  // 2. 拿到响应数据，判断数据中的 success 是否为 true
+  //    如果响应数据.success === true，则说明删除成功
+  // 3. 删除成功，重新发请求加载最新的数据列表
+
+  // 动态渲染的DOM节点，要通过事件委托（事件代理）的方式注册事件
+  $('#list_container').on('click', 'a[name=delete]', handleDelete)
+  
+  // 为编辑按钮注册点击事件
+  $('#list_container').on('click', 'a[name=edit]', handleShowEditModal)
+
+  // 为添加分类表单注册表单提交事件
+  // 当表单内部的 submit 类型的 button 点击的时候，
+  // 当表单内部的文本框敲回车的时候
+  $('#add_form').on('submit', handleAdd)
+
+  $('#submit_edit').on('click', function () {
+    // 手动触发表单的提交行为
+    $('#edit_form').submit()
+  })
+
+  // 写到全局
+  // 这个方法内部会去监听表单的提交行为
+  $('#edit_form').validate({
+    rules: {
+      cate_name: {
+        required: true
+      },
+      cate_slug: {
+        required: true
+      }
+    },
+    messages: {},
+    submitHandler: function (form) {
+      // 当表单验证通过之后，在这里提交表单
+      handleSubmitEdit()
+    }
+  })
+
+  function handleSubmitEdit() {
+    // 1. 获取表单数据
+    var formData = $('#edit_form').serialize()
+
+    // cate_name=xxx&cate_slug=xxx
+    // cate_name=xxx&cate_slug=xxx&cate_id=xxx
+    // console.log(formData)
+
+    // 2. 发起 Ajax 请求，提交表单数据
+    //    UPDATE ali_cate SET cate_name=xxx, cate_slug=xxx WHERE cate_id=xxx
+    $.ajax({
+      url: '/api/categories/update',
+      method: 'POST',
+      data: formData,
+      dataType: 'json',
+      success: function (resData) {
+        if (resData.success) {
+          // 关闭模态框
+          $('#editModal').modal('hide')
+
+          // 刷新列表数据
+          loadList()
+        }
+      },
+      error: function (error) {
+        console.log(error)
+      }
+    })
+
+    // 3. 等待服务端响应
+    // 4. 接收到结果，进行后续处理
+  }
+
+  function handleShowEditModal() {
+    // 1. 显示编辑模态框
+    $('#editModal').modal({
+      show: true
+    })
+
+    // 2. 动态加载分类数据到模态框中的表单中
+    //    data 方法的作用就是专门用来获取元素中以 data-xxx 命名的属性数据
+    var id = $(this).data('id')
+    $.ajax({
+      url: '/api/categories/query',
+      method: 'GET',
+      data: {
+        id: id
+      },
+      dataType: 'json',
+      success: function (resData) {
+        if (resData.success) {
+          var htmlStr = template('edit_form_template', {
+            cate: resData.data
+          })
+          $('#edit_form').html(htmlStr)
+        }
+      },
+      error: function (error) {
+        console.log(error)
+      }
+    })
+  }
+
+  function handleAdd() {
+    // name=1&slug=2
+    // 动态的获取表单中所有具有 name 的 input 元素的值，将数据格式拼接为 key=value&key=value... 格式
+    var formData = $('#add_form').serialize()
+    $.ajax({
+      url: '/api/categories/create',
+      method: 'POST',
+      // data: {
+      //   字段1: dom.value,
+      //   字段1: dom.value,
+      // },
+      // data 常见的两种数据格式
+      //    对象（最终也要转换为 key=value&key=value... 的数据格式）
+      //    字符串（key=value&key=value...）
+      //    这种数据格式虽然和 GET 请求参数格式一样，但是他放的位置是请求体，不是 url
+      data: formData,
+      dataType: 'json',
+      success: function (resData) {
+        if (resData.success) {
+          // 重新加载数据列表
+          loadList()
+          // 清空表单数据
+          $('#add_form').find('input[name]').val('')
+        }
+      },
+      error: function (error) {
+        console.log(error)
+      }
+    })
+    return false
+  }
+
+  function handleDelete() {
+    if (!window.confirm('Are you sure?')) {
+      return
+    }
+    var id = $(this).data('id')
+    $.ajax({
+      url: '/api/categories/delete',
+      method: 'GET',
+      data: {
+        id: id
+      },
+      dataType: 'json',
+      success: function (resData) {
+        // 如果删除成功，重新加载列表数据
+        if (resData.success) {
+          loadList()
+        }
+      },
+      error: function (error) {
+        console.log(error)
+      }
+    })
+    return false
+  }
+
+  function loadList() {
+    $.ajax({
+      url: '/api/categories',
+      method: 'GET',
+      data: {},
+      dataType: 'json',
+      success: function (resData) {
+        // 1. 得到请求响应数据
+        if (resData.success) {
+          // 2. 使用模板引擎解析替换模板字符串
+          var htmlStr = template('list_template', {
+            listData: resData.data
+          })
+          // 3. 把解析替换的结果放到列表容器中
+          $('#list_container').html(htmlStr)
+        }
+      },
+      error: function (error) {
+        // if (error.status >= 500) {
+        //   window.alert('服务器内部异常，请稍后重试')
+        // }
+      }
+    })
+  }
+</script>
+{{/block}}

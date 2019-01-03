@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Document</title>
+</head>
+
+<body>
+  <script type="text/html" id="tpl">
+    大家好，我叫 {{ name }}，我今年 {{ age }} 岁了，我是 {{ gender }} 生
+  </script>
+  <script>
+  // ajax({
+  //   url: 'a.json',
+  //   method: 'GET',
+  //   // data: '',
+  //   dataType: 'json',
+  //   success: function (dataA) {
+  //     ajax({
+  //       url: 'b.json',
+  //       method: 'GET',
+  //       // data: '',
+  //       dataType: 'json',
+  //       success: function (dataB) {
+  //         ajax({
+  //           url: 'c.json',
+  //           method: 'GET',
+  //           // data: '',
+  //           dataType: 'json',
+  //           success: function (dataC) {
+  //             console.log(dataA, dataB, dataC)
+  //           }
+  //         })
+  //       }
+  //     })
+  //   }
+  // })
+
+  // ajax({
+  //   url: 'data.json',
+  //   method: 'GET',
+  //   // data: '',
+  //   dataType: 'json',
+  //   // success: function (data) {
+  //   //   console.log(data)
+  //   // }
+  // }).then(function (data) {
+  //   console.log(data)
+  // })
+
+  function ajax(options) {
+    var xhr = new XMLHttpRequest()
+    xhr.open(options.method || 'GET', options.url)
+    xhr.onload = function () {
+      // console.log(this.responseText)
+      if (options.dataType === 'json') {
+        options.success(JSON.parse(xhr.responseText))
+      } else {
+        options.success(xhr.responseText)
+      }
+    }
+    xhr.send(null)
+  }
+
+  var user = {}
+  
+  pAjax({
+      url: 'a.json',
+      method: 'GET',
+      dataType: 'json'
+    })
+    .then(function (data) {
+      user.name = data.name
+      return pAjax({
+        url: 'b.json',
+        method: 'GET',
+        dataType: 'json'
+      })
+    })
+    .then(function (data) {
+      user.age = data.age
+      return pAjax({
+        url: 'c.json',
+        method: 'GET',
+        dataType: 'json'
+      })
+    })
+    .then(function (data) {
+      user.gender = data.gender
+      console.log(user)
+    })
+
+  function pAjax(options) {
+    return new Promise((resolve, reject) => {
+      var xhr = new XMLHttpRequest()
+      xhr.open(options.method || 'GET', options.url)
+      xhr.onload = function () {
+        // console.log(this.responseText)
+        if (options.dataType === 'json') {
+          // options.success(JSON.parse(xhr.responseText))
+          resolve(JSON.parse(xhr.responseText))
+        } else {
+          // options.success(xhr.responseText)
+          resolve(xhr.responseText)
+        }
+      }
+      xhr.send(null)
+    })
+  }
+  </script>
+</body>
+
+</html>

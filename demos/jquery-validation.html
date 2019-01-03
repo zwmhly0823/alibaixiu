@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Document</title>
+</head>
+
+<body>
+  <form action="" id="form">
+    <div>
+      用户名：<input type="text" name="username">
+    </div>
+    <div>
+      密码：<input type="text" name="password">
+    </div>
+  </form>
+  <div>
+    <button type="submit" id="submit">提交</button>
+  </div>
+  <script src="../public/assets/vendors/jquery/jquery.js"></script>
+  <script src="../public/assets/vendors/jquery-validation/jquery.validate.js"></script>
+  <script src="../public/assets/vendors/jquery-validation/localization/messages_zh.js"></script>
+  <script>
+  $("#form").validate({
+    rules: {
+      username: {
+        required: true,
+        minlength: 2,
+        maxlength: 6
+      },
+      password: {}
+    },
+    messages: {
+      username: {
+        // required: '请输入用户名',
+        // minlength: '请输入至少两个字符'
+      }
+    },
+    // 当验证通过之后会自动调用这个方法
+    // 我们就可以在这个方法中发起 ajax 请求
+    submitHandler: function (form) {
+      // handleAdd
+      // handleEdit
+      console.log($(form).serialize())
+    }
+  });
+
+  $('#submit').on('click', function () {
+    // 手动提交表单
+    $('#form').submit()
+  })
+  </script>
+</body>
+
+</html>

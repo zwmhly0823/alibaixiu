@@ -1,0 +1,183 @@
+{{extend './layout/layout.html'}}
+
+{{block 'head'}}
+<link rel="stylesheet" href="/public/assets/vendors/quill/quill.snow.css">
+{{/block}}
+
+{{block 'body'}}
+<div class="container-fluid">
+  <div class="page-title">
+    <h1>写文章</h1>
+  </div>
+  <!-- 有错误信息时展示 -->
+  <!-- <div class="alert alert-danger">
+    <strong>错误！</strong>发生XXX错误
+  </div> -->
+  <form class="row" id="form">
+    <div class="col-md-9">
+      <div class="form-group">
+        <label for="title">标题</label>
+        <input id="title" class="form-control input-lg" name="title" type="text" placeholder="文章标题">
+      </div>
+      <div class="form-group">
+        <label for="content">内容</label>
+        <!-- <textarea id="content" class="form-control input-lg" name="content" cols="30" rows="10" placeholder="内容"></textarea> -->
+        <div id="editor"></div>
+        <input type="file" id="upload_file" style="display: none;">
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="form-group">
+        <label for="slug">别名</label>
+        <input id="slug" class="form-control" name="slug" type="text" placeholder="slug">
+        <p class="help-block">https://example.com/post/<strong>slug</strong></p>
+      </div>
+      <div class="form-group">
+        <label for="feature">特色图像</label>
+        <!-- show when image chose -->
+        <img class="help-block thumbnail" style="display: none">
+        <input id="feature" class="form-control" name="feature" type="file">
+      </div>
+      <div class="form-group">
+        <label for="category">所属分类</label>
+        <select id="category" class="form-control" name="category">
+          {{each categories}}
+          <option value="{{ $value.cate_id }}">{{ $value.cate_name }}</option>
+          {{/each}}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="created">发布时间</label>
+        <input id="created" class="form-control" name="created" type="datetime-local">
+      </div>
+      <div class="form-group">
+        <label for="status">状态</label>
+        <select id="status" class="form-control" name="status">
+          <option value="草稿">草稿</option>
+          <option value="已发布">已发布</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <button class="btn btn-primary" type="submit" id="submit_btn">保存</button>
+      </div>
+    </div>
+  </form>
+</div>
+{{/block}}
+
+{{block 'script'}}
+<script src="/public/assets/vendors/quill/quill.js"></script>
+<script>
+  /**
+   * 初始化富文本编辑器
+   */
+  // var toolbarOptions = ['bold', 'italic', 'underline', 'strike']
+  // var toolbarOptions = [['bold', 'italic'], ['link', 'image']]
+  var toolbarOptions = [
+    ['bold', 'italic', 'underline', 'strike'],        // toggled buttons
+    ['blockquote', 'code-block'],
+
+    [{ 'header': 1 }, { 'header': 2 }],               // custom button values
+    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+    [{ 'script': 'sub'}, { 'script': 'super' }],      // superscript/subscript
+    [{ 'indent': '-1'}, { 'indent': '+1' }],          // outdent/indent
+    [{ 'direction': 'rtl' }],                         // text direction
+
+    [{ 'size': ['small', false, 'large', 'huge'] }],  // custom dropdown
+    [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+
+    [{ 'color': [] }, { 'background': [] }],          // dropdown with defaults from theme
+    [{ 'font': [] }],
+    [{ 'align': [] }],
+
+    ['clean'],                                         // remove formatting button
+    ['image']
+  ]
+  var quill = new Quill('#editor', {
+    theme: 'snow',
+    modules: {
+      toolbar: toolbarOptions
+    }
+  })
+
+  // 1. 在页面中放置一个 file 类型的 input
+  // 2. 监听工具栏中 image 的点击行为
+  // 3. 在 image 的点击行为中手动触发 file 的点击事件
+  //    file 的默认点击行为会弹框让用户选择要上传的文件
+  // 4. 监听 file 的 change 事件
+  //    当 change 事件发生改变，读取 file 的文件对象，构建 FormData 发送给服务器
+  // 5. 服务器接受到请求，把文件存储到服务器中，然后响应该资源的 Web 请求路径
+  var toolbar = quill.getModule('toolbar')
+  toolbar.addHandler('image', function () {
+    $('#upload_file').click()
+  })
+
+  $('#upload_file').on('change', function () {
+    var formData = new FormData()
+    formData.append('file', $('#upload_file')[0].files[0])
+    $.ajax({
+      url: "/api/upload",
+      type: "POST",
+      data: formData,
+      processData: false,  // 不处理数据
+      contentType: false,   // 不设置内容类型
+      success: function (resData) {
+        if (resData.success) {
+          // 获取到当前编辑器中光标的位置
+          // 在光标位置插入一个 image，把 image 的 src 设置为服务端返回的那个 Web 路径
+          var range = quill.getSelection()
+          if (range && range.index) {
+            quill.insertEmbed(range.index, 'image', resData.data)
+          }
+        }
+      },
+      error: function (err) {
+        console.log(err)
+      }
+    })
+  })
+
+  $('#submit_btn').on('click', handleSubmit)
+
+  function handleSubmit() {
+    // 1. 获取表单数据
+
+    // 获取的数据不包含文件，所以它获取的数据只是用于没有文件的表单 POST 提交
+    // console.log($('#form').serialize())
+    
+    // 一个一个的手动 append 表单元素
+    // var formData = new FormData()
+    // formData.append('foo', 'bar')
+    // formData.append('num', '123')
+    // formData.append('name', 'Jack')
+    // ....
+
+    // 基于一个表单元素创建 FormData 对象
+    // FormData 会去找到表单中所有具有 name 的元素，把 name、value 都 append 到容器中
+    // 带有文件的表单 POST 提交，一定得是 multipart/form-data 数据格式
+    var formData = new FormData($('#form')[0])
+    // 不用记 API，只需要知道我们要把富文本编辑器产生的 HTML 标签字符串提交给服务器
+    formData.append('content', quill.root.innerHTML)
+
+    // 2. 提交表单
+    $.ajax({
+      url: "/api/posts/create",
+      type: "POST",
+      data: formData,
+      processData: false,  // 不处理数据
+      contentType: false,   // 不设置内容类型
+      success: function (resData) {
+        if (resData.success) {
+          window.location.href = '/admin/posts'
+        }
+      },
+      error: function (err) {
+        console.log(err)
+      }
+    })
+
+    // 3. 根据响应结果做后续处理
+    return false
+  }
+</script>
+{{/block}}
